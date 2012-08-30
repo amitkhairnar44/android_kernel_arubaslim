@@ -517,18 +517,19 @@ void kgsl_cache_range_op(struct kgsl_memdesc *memdesc, int op)
 	void *addr = memdesc->hostptr;
 	int size = memdesc->size;
 
-	switch (op) {
-	case KGSL_CACHE_OP_FLUSH:
-		dmac_flush_range(addr, addr + size);
-		break;
-	case KGSL_CACHE_OP_CLEAN:
-		dmac_clean_range(addr, addr + size);
-		break;
-	case KGSL_CACHE_OP_INV:
-		dmac_inv_range(addr, addr + size);
-		break;
+	if (addr !=  NULL) {
+		switch (op) {
+		case KGSL_CACHE_OP_FLUSH:
+			dmac_flush_range(addr, addr + size);
+			break;
+		case KGSL_CACHE_OP_CLEAN:
+			dmac_clean_range(addr, addr + size);
+			break;
+		case KGSL_CACHE_OP_INV:
+			dmac_inv_range(addr, addr + size);
+			break;
+		}
 	}
-
 	outer_cache_range_op_sg(memdesc->sg, memdesc->sglen, op);
 }
 EXPORT_SYMBOL(kgsl_cache_range_op);
@@ -536,7 +537,7 @@ EXPORT_SYMBOL(kgsl_cache_range_op);
 static int
 _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 			struct kgsl_pagetable *pagetable,
-			size_t size, unsigned int protflags)
+			size_t size)
 {
 	int pcount = 0, order, ret = 0;
 	int j, len, page_size, sglen_alloc, sglen = 0;
@@ -544,6 +545,7 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 	pgprot_t page_prot = pgprot_writecombine(PAGE_KERNEL);
 	void *ptr;
 	unsigned int align;
+
 
 	align = (memdesc->flags & KGSL_MEMALIGN_MASK) >> KGSL_MEMALIGN_SHIFT;
 
@@ -571,10 +573,11 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 	memdesc->pagetable = pagetable;
 	memdesc->ops = &kgsl_page_alloc_ops;
 
-	memdesc->sglen_alloc = sglen_alloc;
-	memdesc->sg = kgsl_sg_alloc(memdesc->sglen_alloc);
+	memdesc->sg = kgsl_sg_alloc(sglen_alloc);
 
 	if (memdesc->sg == NULL) {
+		KGSL_CORE_ERR("vmalloc(%d) failed\n",
+			sglen_alloc * sizeof(struct scatterlist));
 		ret = -ENOMEM;
 		goto done;
 	}
@@ -586,38 +589,34 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 	 * two pages; well within the acceptable limits for using kmalloc.
 	 */
 
-	pages = kmalloc(memdesc->sglen_alloc * sizeof(struct page *),
-		GFP_KERNEL);
+	pages = kmalloc(sglen_alloc * sizeof(struct page *), GFP_KERNEL);
 
 	if (pages == NULL) {
+		KGSL_CORE_ERR("kmalloc (%d) failed\n",
+			sglen_alloc * sizeof(struct page *));
 		ret = -ENOMEM;
 		goto done;
 	}
 
 	kmemleak_not_leak(memdesc->sg);
 
-	sg_init_table(memdesc->sg, memdesc->sglen_alloc);
+	memdesc->sglen_alloc = sglen_alloc;
+	sg_init_table(memdesc->sg, sglen_alloc);
 
 	len = size;
 
 	while (len > 0) {
 		struct page *page;
-		unsigned int gfp_mask = __GFP_HIGHMEM;
+		unsigned int gfp_mask = GFP_KERNEL | __GFP_HIGHMEM |
+			__GFP_NOWARN | __GFP_NORETRY;
 		int j;
 
 		/* don't waste space at the end of the allocation*/
 		if (len < page_size)
 			page_size = PAGE_SIZE;
 
-		/*
-		 * Don't do some of the more aggressive memory recovery
-		 * techniques for large order allocations
-		 */
 		if (page_size != PAGE_SIZE)
-			gfp_mask |= __GFP_COMP | __GFP_NORETRY |
-				__GFP_NO_KSWAPD | __GFP_NOWARN;
-		else
-			gfp_mask |= GFP_KERNEL;
+			gfp_mask |= __GFP_COMP;
 
 		page = alloc_pages(gfp_mask, get_order(page_size));
 
@@ -703,11 +702,6 @@ _kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 	outer_cache_range_op_sg(memdesc->sg, memdesc->sglen,
 				KGSL_CACHE_OP_FLUSH);
 
-	ret = kgsl_mmu_map(pagetable, memdesc, protflags);
-
-	if (ret)
-		goto done;
-
 	KGSL_STATS_ADD(size, kgsl_driver.stats.page_alloc,
 		kgsl_driver.stats.page_alloc_max);
 
@@ -734,8 +728,7 @@ kgsl_sharedmem_page_alloc(struct kgsl_memdesc *memdesc,
 
 	size = ALIGN(size, PAGE_SIZE * 2);
 
-	ret =  _kgsl_sharedmem_page_alloc(memdesc, pagetable, size,
-		GSL_PT_PAGE_RV | GSL_PT_PAGE_WV);
+	ret =  _kgsl_sharedmem_page_alloc(memdesc, pagetable, size);
 	if (!ret)
 		ret = kgsl_page_alloc_map_kernel(memdesc);
 	if (ret)
@@ -749,17 +742,7 @@ kgsl_sharedmem_page_alloc_user(struct kgsl_memdesc *memdesc,
 			    struct kgsl_pagetable *pagetable,
 			    size_t size)
 {
-	unsigned int protflags;
-
-	if (size == 0)
-		return -EINVAL;
-
-	protflags = GSL_PT_PAGE_RV;
-	if (!(memdesc->flags & KGSL_MEMFLAGS_GPUREADONLY))
-		protflags |= GSL_PT_PAGE_WV;
-
-	return _kgsl_sharedmem_page_alloc(memdesc, pagetable, size,
-		protflags);
+	return _kgsl_sharedmem_page_alloc(memdesc, pagetable, PAGE_ALIGN(size));
 }
 EXPORT_SYMBOL(kgsl_sharedmem_page_alloc_user);
 
@@ -833,12 +816,6 @@ _kgsl_sharedmem_ebimem(struct kgsl_memdesc *memdesc,
 	}
 
 	result = memdesc_sg_phys(memdesc, memdesc->physaddr, size);
-
-	if (result)
-		goto err;
-
-	result = kgsl_mmu_map(pagetable, memdesc,
-		GSL_PT_PAGE_RV | GSL_PT_PAGE_WV);
 
 	if (result)
 		goto err;
