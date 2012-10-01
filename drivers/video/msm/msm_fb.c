@@ -1919,6 +1919,20 @@ static int msm_fb_release(struct fb_info *info, int user)
 	return ret;
 }
 
+int msm_fb_wait_for_fence(struct msm_fb_data_type *mfd)
+{
+	int i, ret = 0;
+	/* buf sync */
+        msm_fb_wait_for_fence(mfd);
+	return ret;
+}
+int msm_fb_signal_timeline(struct msm_fb_data_type *mfd)
+{
+	msm_fb_signal_timeline(mfd);
+	return 0;
+}
+
+
 DEFINE_SEMAPHORE(msm_fb_pan_sem);
 
 static void bl_workqueue_handler(struct work_struct *work)
