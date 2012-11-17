@@ -2434,6 +2434,16 @@ struct ion_platform_heap msm7627a_heaps[] = {
 			.extra_data = (void *)&co_ion_pdata,
 			.base = BOOTLOADER_BASE_ADDR,
 		},
+		/* AUDIO HEAP 2*/
+		{
+			.id	= ION_AUDIO_HEAP_BL_ID,
+			.type	= ION_HEAP_TYPE_CARVEOUT,
+			.name	= ION_AUDIO_BL_HEAP_NAME,
+			.memory_type = ION_EBI_TYPE,
+			.extra_data = (void *)&co_ion_pdata,
+			.base = BOOTLOADER_BASE_ADDR,
+		},
+
 #endif
 };
 
