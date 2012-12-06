@@ -919,15 +919,6 @@ static struct platform_driver msm_fb_driver = {
 boolean wakeupflag = TRUE ; 
 #endif
 
-#if defined(CONFIG_FB_MSM_MIPI_HX8369B_WVGA_PT_PANEL) || defined(CONFIG_MACH_NEVIS3G_REV03)
-static void memset32_io(u32 __iomem *_ptr, u32 val, size_t count)
-{
-	count >>= 2;
-	while (count--)
-		writel(val, _ptr++);
-}
-#endif
-
 static void msmfb_early_suspend(struct early_suspend *h)
 {
 #ifdef CONFIG_FB_MSM_MIPI_DSI_WHITESCREEN
@@ -937,10 +928,6 @@ static void msmfb_early_suspend(struct early_suspend *h)
 	struct msm_fb_data_type *mfd = container_of(h, struct msm_fb_data_type,
 						early_suspend);
 	struct msm_fb_panel_data *pdata = NULL;
-
-#if defined(CONFIG_FB_MSM_MIPI_HX8369B_WVGA_PT_PANEL) || defined(CONFIG_MACH_NEVIS3G_REV03)
-	struct fb_info *fbi = mfd->fbi;
-#endif	
 
 #ifdef CONFIG_FB_MSM_MIPI_DSI_WHITESCREEN
 	while(waitcount){
@@ -960,11 +947,6 @@ static void msmfb_early_suspend(struct early_suspend *h)
 	}
 #else
 	msm_fb_suspend_sub(mfd);
-#endif
-
-#if defined(CONFIG_FB_MSM_MIPI_HX8369B_WVGA_PT_PANEL) || defined(CONFIG_MACH_NEVIS3G_REV03)
-//Sometimes, The screen is seen previous image for a moment
-	memset32_io((void *)fbi->screen_base, 0xFF000000, fbi->fix.smem_len);
 #endif
 
 	pdata = (struct msm_fb_panel_data *)mfd->pdev->dev.platform_data;
