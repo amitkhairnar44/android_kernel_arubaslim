@@ -305,6 +305,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 #if !defined(CONFIG_MACH_NEVIS3G_REV03)
 	ret = panel_next_on(pdev);
 #endif
+        mdp_histogram_ctrl_all(TRUE);
 	if (ret == 0) {
 		/* enable LCDC block */
 		MDP_OUTP(MDP_BASE + timer_base, 1);
