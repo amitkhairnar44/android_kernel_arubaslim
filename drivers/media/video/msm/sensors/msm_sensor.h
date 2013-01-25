@@ -35,7 +35,9 @@
 #define MSM_SENSOR_MCLK_8HZ 8000000
 #define MSM_SENSOR_MCLK_16HZ 16000000
 #define MSM_SENSOR_MCLK_24HZ 24000000
+#define MSM_SENSOR_MCLK_48HZ 48000000
 
+#define CAMERA_NAME_LEN 128  //this size is same with CAMERA_NAME_LEN in board_msm7627a_camera.c
 enum msm_sensor_reg_update {
 	/* Sensor egisters that need to be updated during initialization */
 	MSM_SENSOR_REG_INIT,
@@ -154,6 +156,11 @@ struct msm_sensor_csi_info {
 	uint8_t is_csic;
 };
 
+enum msm_sensor_state {
+ 	MSM_SENSOR_POWER_UP,
+ 	MSM_SENSOR_POWER_DOWN,
+ };
+ 
 struct msm_sensor_ctrl_t {
 	struct  msm_camera_sensor_info *sensordata;
 	struct i2c_client *msm_sensor_client;
@@ -193,7 +200,8 @@ struct msm_sensor_ctrl_t {
 	struct regulator **reg_ptr;
 	struct clk *cam_clk;
 	long clk_rate;
-
+ 	char sensor_name[CAMERA_NAME_LEN];
+ 	enum msm_sensor_state sensor_state;
 	uint8_t is_HD_preview;
 	uint32_t need_configuration;
 	uint8_t is_initialized;
