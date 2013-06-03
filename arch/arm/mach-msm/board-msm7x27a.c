@@ -1314,8 +1314,13 @@ static void fan54013_gpio_init(void)
 
 /////////////////////////////////////////////////////////////////////////////////
 
-
-
+#define CAMERA_HEAP_BASE 0x0
+#ifdef CONFIG_CMA
+#define CAMERA_HEAP_TYPE ION_HEAP_TYPE_DMA
+#else
+#define CAMERA_HEAP_TYPE ION_HEAP_TYPE_CARVEOUT
+#endif
+ 
 #define PMEM_KERNEL_EBI1_SIZE	0x3A000
 #define MSM_PMEM_AUDIO_SIZE	0xF0000
 #define BOOTLOADER_BASE_ADDR    0x10000

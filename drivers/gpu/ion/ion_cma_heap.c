@@ -21,6 +21,7 @@
 #include <linux/errno.h>
 #include <linux/err.h>
 #include <linux/dma-mapping.h>
+#include <linux/dma-contiguous.h>
 #include <mach/iommu_domains.h>
 
 #include <asm/cacheflush.h>
@@ -45,7 +46,7 @@ static int cma_heap_has_outer_cache;
 int ion_cma_get_sgtable(struct device *dev, struct sg_table *sgt,
 			void *cpu_addr, dma_addr_t handle, size_t size)
 {
-	struct page *page = phys_to_page(handle);
+	struct page *page = virt_to_page(cpu_addr);
 	int ret;
 
 	ret = sg_alloc_table(sgt, 1, GFP_KERNEL);
@@ -147,8 +148,13 @@ static int ion_cma_mmap(struct ion_heap *mapper, struct ion_buffer *buffer,
 	struct device *dev = buffer->heap->priv;
 	struct ion_cma_buffer_info *info = buffer->priv_virt;
 
-	return dma_mmap_writecombine(dev, vma, info->cpu_addr, info->handle,
-				 buffer->size);
+
+	if (ION_IS_CACHED(buffer->flags))
+		return dma_mmap_nonconsistent(dev, vma, info->cpu_addr,
+				info->handle, buffer->size);
+	else
+		return dma_mmap_writecombine(dev, vma, info->cpu_addr,
+				info->handle, buffer->size);
 }
 
 static void *ion_cma_map_kernel(struct ion_heap *heap,

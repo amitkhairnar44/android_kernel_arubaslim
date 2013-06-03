@@ -66,6 +66,13 @@
 #include "board-msm7x27a-regulator.h"
 #include "board-msm7627a.h"
 
+#define CAMERA_HEAP_BASE 0x0
+#ifdef CONFIG_CMA
+#define CAMERA_HEAP_TYPE ION_HEAP_TYPE_DMA
+#else
+#define CAMERA_HEAP_TYPE ION_HEAP_TYPE_CARVEOUT
+#endif
+ 
 #define PMEM_KERNEL_EBI1_SIZE	0x3A000
 #define MSM_PMEM_AUDIO_SIZE	0xF0000
 #define BOOTLOADER_BASE_ADDR    0x10000
@@ -876,11 +883,40 @@ struct ion_platform_heap msm7627a_heaps[] = {
 #endif
 };
 
+ #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
+  		/* PMEM_ADSP = CAMERA */
+  		{
+  			.id	= ION_CAMERA_HEAP_ID,
+ 			.type	= CAMERA_HEAP_TYPE,
+  			.name	= ION_CAMERA_HEAP_NAME,
+  			.memory_type = ION_EBI_TYPE,
+ 			.extra_data = (void *)&co_mm_ion_pdata,
+ 			.priv = (void *)&ion_cma_device.dev,
+  		},
+  		/* PMEM_AUDIO */
+  		{
 static struct ion_platform_data ion_pdata = {
-	.nr = MSM_ION_HEAP_NUM,
-	.has_outer_cache = 1,
-	.heaps = msm7627a_heaps,
+  			.extra_data = (void *)&co_ion_pdata,
+  		},
+  #endif
 };
+
+ /**
+  * These heaps are listed in the order they will be allocated.
+  * Don't swap the order unless you know what you are doing!
+  */
+static struct ion_platform_data ion_pdata = {
+ 	.nr = MSM_ION_HEAP_NUM,
+ 	.has_outer_cache = 1,
+ 	.heaps = qrd7627a_heaps,
+ };
+
+struct ion_platform_heap qrd7627a_heaps[] = {
+  		{
+  			.id	= ION_SYSTEM_HEAP_ID,
+  			.type	= ION_HEAP_TYPE_SYSTEM,
+ 			.name	= ION_VMALLOC_HEAP_NAME,
+ 		},
 
 static struct platform_device ion_dev = {
 	.name = "ion-msm",
