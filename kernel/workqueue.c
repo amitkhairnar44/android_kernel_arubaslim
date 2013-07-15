@@ -42,6 +42,8 @@
 #include <linux/lockdep.h>
 #include <linux/moduleparam.h>
 #include <linux/idr.h>
+#include <linux/moduleparam.h>
+
 #ifdef CONFIG_SEC_DEBUG
 #include <linux/sec_debug.h>
 #endif
@@ -1938,6 +1940,7 @@ __acquires(&gcwq->lock)
 		       current->comm, preempt_count(), task_pid_nr(current),
 		       worker->current_func);
 		debug_show_held_locks(current);
+		BUG_ON(PANIC_CORRUPTION);
 		dump_stack();
 	}
 
