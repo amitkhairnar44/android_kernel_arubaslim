@@ -155,12 +155,12 @@ struct msm_sensor_csi_info {
 	uint32_t csid_version;
 	uint8_t is_csic;
 };
-
+#ifdef SENSOR_POWER_CHECK_PATCH
 enum msm_sensor_state {
  	MSM_SENSOR_POWER_UP,
  	MSM_SENSOR_POWER_DOWN,
  };
- 
+#endif 
 struct msm_sensor_ctrl_t {
 	struct  msm_camera_sensor_info *sensordata;
 	struct i2c_client *msm_sensor_client;
@@ -201,7 +201,9 @@ struct msm_sensor_ctrl_t {
 	struct clk *cam_clk;
 	long clk_rate;
  	char sensor_name[CAMERA_NAME_LEN];
+#ifdef SENSOR_POWER_CHECK_PATCH
  	enum msm_sensor_state sensor_state;
+#endif
 	uint8_t is_HD_preview;
 	uint32_t need_configuration;
 	uint8_t is_initialized;

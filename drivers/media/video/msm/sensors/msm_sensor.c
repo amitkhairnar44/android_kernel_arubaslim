@@ -253,6 +253,7 @@ void msm_sensor_checking_mode_changed(struct msm_sensor_ctrl_t *s_ctrl)
         if(!REG_TC_GP_EnableModeChanged)break;
 
         mdelay(10);
+#ifdef SENSOR_POWER_CHECK_PATCH
 	s_ctrl->sensor_state = MSM_SENSOR_POWER_DOWN;
         cnt++;
     }    
@@ -493,9 +494,11 @@ long msm_sensor_subdev_ioctl(struct v4l2_subdev *sd,
 			unsigned int cmd, void *arg)
 {
 	struct msm_sensor_ctrl_t *s_ctrl = get_sctrl(sd);
+#ifdef SENSOR_POWER_CHECK_PATCH
 	void __user *argp = (void __user *)arg;
 	if (s_ctrl->sensor_state == MSM_SENSOR_POWER_DOWN)
  		return -EINVAL;
+#endif
 	switch (cmd) {
 	case VIDIOC_MSM_SENSOR_CFG:
 		return s_ctrl->func_tbl->sensor_config(s_ctrl, argp);
@@ -956,16 +959,20 @@ int32_t msm_sensor_power(struct v4l2_subdev *sd, int on)
 	struct msm_sensor_ctrl_t *s_ctrl = get_sctrl(sd);
 	mutex_lock(s_ctrl->msm_sensor_mutex);
 	if (on) {
+#ifdef SENSOR_POWER_CHECK_PATCH
 		if(s_ctrl->sensor_state == MSM_SENSOR_POWER_UP) {
  			pr_err("%s: sensor already in power up state\n", __func__);
  			mutex_unlock(s_ctrl->msm_sensor_mutex);
  			return -EINVAL;
  		}
+#endif
 		rc = s_ctrl->func_tbl->sensor_power_up(s_ctrl);
 		if (rc < 0) {
 			pr_err("%s: %s power_up failed rc = %d\n", __func__,
 				s_ctrl->sensordata->sensor_name, rc);
+#ifdef SENSOR_POWER_CHECK_PATCH
 			s_ctrl->sensor_state = MSM_SENSOR_POWER_DOWN;
+#endif
 		} else {
 			if (s_ctrl->func_tbl->sensor_match_id)
 				rc = s_ctrl->func_tbl->sensor_match_id(s_ctrl);
@@ -980,9 +987,9 @@ int32_t msm_sensor_power(struct v4l2_subdev *sd, int on)
 				s_ctrl->func_tbl->sensor_power_down(s_ctrl);
 				s_ctrl->func_tbl->sensor_power_up(s_ctrl);
 				retry--;
-								
+
     			if (s_ctrl->func_tbl->sensor_match_id)
-    				rc = s_ctrl->func_tbl->sensor_match_id(s_ctrl);
+   				rc = s_ctrl->func_tbl->sensor_match_id(s_ctrl);
     			else
     				rc = msm_sensor_match_id(s_ctrl);
 			}
@@ -995,9 +1002,13 @@ int32_t msm_sensor_power(struct v4l2_subdev *sd, int on)
 					pr_err("%s: %s power_down failed\n",
 					__func__,
 					s_ctrl->sensordata->sensor_name);
+#ifdef SENSOR_POWER_CHECK_PATCH					
 				s_ctrl->sensor_state = MSM_SENSOR_POWER_DOWN;
+#endif					
 			}
-			s_ctrl->sensor_state = MSM_SENSOR_POWER_UP;		
+#ifdef SENSOR_POWER_CHECK_PATCH					
+			s_ctrl->sensor_state = MSM_SENSOR_POWER_UP;
+#endif		
  		}
 	} else {
 		if(s_ctrl->sensor_state == MSM_SENSOR_POWER_DOWN) {
@@ -1006,7 +1017,9 @@ int32_t msm_sensor_power(struct v4l2_subdev *sd, int on)
  			return -EINVAL;
  		}
 		rc = s_ctrl->func_tbl->sensor_power_down(s_ctrl);
+#ifdef SENSOR_POWER_CHECK_PATCH					
 		s_ctrl->sensor_state = MSM_SENSOR_POWER_DOWN;
+#endif
 	}
 	mutex_unlock(s_ctrl->msm_sensor_mutex);
 	return rc;
