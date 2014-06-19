@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2012, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -347,12 +347,12 @@ static struct dsi_cmd_desc nt35510_cmd_display_on_kyleplus3[] = {
 	{DTYPE_GEN_LWRITE, 1, 0, 0, NT35510_CMD_SETTLE, sizeof(cmd21), cmd21},
 	{DTYPE_GEN_LWRITE, 1, 0, 0, NT35510_CMD_SETTLE, sizeof(cmd22), cmd22},
 	{DTYPE_GEN_LWRITE, 1, 0, 0, NT35510_CMD_SETTLE, sizeof(cmd23), cmd23},
-#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN) || defined(CONFIG_MACH_INFINITE_DUOS_CTC)
+#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN)
 	{DTYPE_GEN_LWRITE, 1, 0, 0, NT35510_CMD_SETTLE, sizeof(all_pixel_off), all_pixel_off},
 #endif
 	{DTYPE_GEN_LWRITE, 1, 0, 0, NT35510_CMD_SETTLE, sizeof(display_on), display_on},
 };
-#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN) || defined(CONFIG_MACH_INFINITE_DUOS_CTC)
+#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN)
 static struct dsi_cmd_desc nt35510_cmd_unblank[] = {
 	// don't use display_on command, because it causes flash
 	{DTYPE_GEN_LWRITE, 1, 0, 0, NT35510_CMD_SETTLE, sizeof(normal_disp_mode_on), normal_disp_mode_on},
@@ -699,7 +699,7 @@ static void nt35510_disp_powerdown(void)
 }
 #endif /* (1 == NT35510_USE_POWERDOWN) */
 
-#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN) || defined(CONFIG_MACH_INFINITE_DUOS_CTC)
+#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN)
 static void mipi_nt35510_unblank(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
@@ -721,10 +721,8 @@ static int mipi_nt35510_lcd_on(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
 	struct mipi_panel_info *mipi;
-	int rotate = 1;
-        int ret = 0;
-
-	DPRINT("start %s\n", __func__);
+	static int rotate;
+	struct dcs_cmd_req cmdreq;
 
 	mfd = platform_get_drvdata(pdev);
 	if (!mfd)
@@ -749,40 +747,45 @@ static int mipi_nt35510_lcd_on(struct platform_device *pdev)
 	if (mipi_nt35510_pdata && mipi_nt35510_pdata->rotate_panel)
 		rotate = mipi_nt35510_pdata->rotate_panel();
 
+	memset(&cmdreq, 0, sizeof(cmdreq));
 	if (mipi->mode == DSI_VIDEO_MODE) {
-		mipi_dsi_cmds_tx(&nt35510_tx_buf,
-			nt35510_video_display_on_cmds,
-			ARRAY_SIZE(nt35510_video_display_on_cmds));
+		cmdreq.cmds = nt35510_video_display_on_cmds;
+		cmdreq.cmds_cnt = ARRAY_SIZE(nt35510_video_display_on_cmds);
+		cmdreq.flags = CMD_REQ_COMMIT;
+		cmdreq.rlen = 0;
+		cmdreq.cb = NULL;
+		mipi_dsi_cmdlist_put(&cmdreq);
 
 		if (rotate) {
-			mipi_dsi_cmds_tx(&nt35510_tx_buf,
-				nt35510_video_display_on_cmds_rotate,
-			ARRAY_SIZE(nt35510_video_display_on_cmds_rotate));
+			cmdreq.cmds = nt35510_video_display_on_cmds_rotate;
+			cmdreq.cmds_cnt =
+			ARRAY_SIZE(nt35510_video_display_on_cmds_rotate);
+			cmdreq.flags = CMD_REQ_COMMIT;
+			cmdreq.rlen = 0;
+			cmdreq.cb = NULL;
+			mipi_dsi_cmdlist_put(&cmdreq);
 		}
 	} else if (mipi->mode == DSI_CMD_MODE) {
-		
-		ret = mipi_dsi_cmds_tx(&nt35510_tx_buf, nt35510_cmd_display_on_kyleplus_exit_sleep, ARRAY_SIZE(nt35510_cmd_display_on_kyleplus_exit_sleep));
-		if(ret==0)
-			goto MIPI_ERROR;
-		mdelay(5);
-		ret = mipi_dsi_cmds_tx(&nt35510_tx_buf, nt35510_cmd_display_on_kyleplus1, ARRAY_SIZE(nt35510_cmd_display_on_kyleplus1));
-		if(ret==0)
-			goto MIPI_ERROR;
-		ret = mipi_dsi_cmds_tx(&nt35510_tx_buf, nt35510_cmd_display_on_kyleplus2, ARRAY_SIZE(nt35510_cmd_display_on_kyleplus2));
-		if(ret==0)
-			goto MIPI_ERROR;
-		if (rotate) {
-			ret = mipi_dsi_cmds_tx(&nt35510_tx_buf,
-				nt35510_cmd_display_on_cmds_rotate,
-			ARRAY_SIZE(nt35510_cmd_display_on_cmds_rotate));
-			if(ret==0)
-			goto MIPI_ERROR;
-		}
-		ret = mipi_dsi_cmds_tx(&nt35510_tx_buf, nt35510_cmd_display_on_kyleplus3, ARRAY_SIZE(nt35510_cmd_display_on_kyleplus3));
-		if(ret==0)
-			goto MIPI_ERROR;
+		cmdreq.cmds = nt35510_cmd_display_on_cmds;
+		cmdreq.cmds_cnt =
+			ARRAY_SIZE(nt35510_cmd_display_on_cmds);
+		cmdreq.flags = CMD_REQ_COMMIT;
+		cmdreq.rlen = 0;
+		cmdreq.cb = NULL;
+		mipi_dsi_cmdlist_put(&cmdreq);
 
-#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN) || defined(CONFIG_MACH_INFINITE_DUOS_CTC)
+		if (rotate) {
+			cmdreq.cmds = nt35510_cmd_display_on_cmds_rotate;
+			cmdreq.cmds_cnt =
+				ARRAY_SIZE(nt35510_cmd_display_on_cmds_rotate);
+			cmdreq.flags = CMD_REQ_COMMIT;
+			cmdreq.rlen = 0;
+			cmdreq.cb = NULL;
+			mipi_dsi_cmdlist_put(&cmdreq);
+		}
+		mipi_dsi_cmds_tx(&nt35510_tx_buf, nt35510_cmd_display_on_kyleplus3, ARRAY_SIZE(nt35510_cmd_display_on_kyleplus3));
+
+#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN)
 		// delay to avoid flash caused by display_on command, 
 		// it work with msm_fb_blank_sub() backlight protection
 		msleep(160);
@@ -796,14 +799,11 @@ static int mipi_nt35510_lcd_on(struct platform_device *pdev)
 
 	DPRINT("exit %s\n", __func__);
 	return 0;
-	
-MIPI_ERROR:
-	DPRINT("%s MIPI_ERROR -\n", __func__);
-	return ret;
 }
 static int mipi_nt35510_lcd_off(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
+	struct dcs_cmd_req cmdreq;
 
 	static int b_first_off=1;
 
@@ -816,7 +816,7 @@ static int mipi_nt35510_lcd_off(struct platform_device *pdev)
 	if (mfd->key != MFD_KEY)
 		return -EINVAL;
 	
-#if !defined(CONFIG_MACH_KYLEPLUS_CTC) && !defined(CONFIG_MACH_KYLEPLUS_OPEN) && !defined(CONFIG_MACH_INFINITE_DUOS_CTC)
+#if !defined(CONFIG_MACH_KYLEPLUS_CTC) && !defined(CONFIG_MACH_KYLEPLUS_OPEN)
 	backlight_ic_set_brightness(0);
 #endif	
 	if(b_first_off)	// workaround.
@@ -848,19 +848,18 @@ static int mipi_nt35510_lcd_off(struct platform_device *pdev)
 	is_lcd_on = 0;
 #endif
 
-#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN) || defined(CONFIG_MACH_INFINITE_DUOS_CTC)
+#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN)
 	// let screen light off smoothly, because backlight is turning off in another thread now
 	msleep(80);
 #endif
 
-	mipi_dsi_cmds_tx(&nt35510_tx_buf, nt35510_display_off_cmds,
-			ARRAY_SIZE(nt35510_display_off_cmds));
-#if (1 == NT35510_USE_DEEP_STANDBY)
-        nt35510_disp_enter_deep_standby(mfd, &nt35510_tx_buf);
-#endif /* (1 == NT35510_USE_DEEP_STANDBY) */
-#if (1 == NT35510_USE_POWERDOWN)
-        nt35510_disp_powerdown();
-#endif /* (1 == NT35510_USE_POWERDOWN) */
+	memset(&cmdreq, 0, sizeof(cmdreq));
+	cmdreq.cmds = nt35510_display_off_cmds;
+	cmdreq.cmds_cnt = ARRAY_SIZE(nt35510_display_off_cmds);
+	cmdreq.flags = CMD_REQ_COMMIT;
+	cmdreq.rlen = 0;
+	cmdreq.cb = NULL;
+	mipi_dsi_cmdlist_put(&cmdreq);
 
 	DPRINT("exit %s\n", __func__);
 	return 0;
@@ -871,7 +870,7 @@ static ssize_t mipi_nt35510_lcdtype_show(struct device *dev,
         struct device_attribute *attr, char *buf)
 {
         char temp[20];
-        sprintf(temp, "INH_GH96-05884A\n");
+        sprintf(temp, "BOE_GH96-05884A\n");
         strcat(buf, temp);
         return strlen(buf);
 }
@@ -1044,7 +1043,7 @@ static struct msm_fb_panel_data nt35510_panel_data = {
 	.on	= mipi_nt35510_lcd_on,
 	.off = mipi_nt35510_lcd_off,
 	.set_backlight = mipi_nt35510_set_backlight,
-#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN) || defined(CONFIG_MACH_INFINITE_DUOS_CTC)
+#if defined(CONFIG_FB_MSM_MIPI_CMD_PANEL_AVOID_MOSAIC) || defined(CONFIG_MACH_KYLEPLUS_OPEN)
 	.unblank = mipi_nt35510_unblank,
 #endif
 };

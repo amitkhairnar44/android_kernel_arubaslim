@@ -50,14 +50,12 @@ static int mipi_dsi_remove(struct platform_device *pdev);
 
 static int mipi_dsi_off(struct platform_device *pdev);
 static int mipi_dsi_on(struct platform_device *pdev);
-static int mipi_dsi_fps_level_change(struct platform_device *pdev,
-					u32 fps_level);
 
 static struct platform_device *pdev_list[MSM_FB_MAX_DEV_LIST];
 static int pdev_list_cnt;
 static struct mipi_dsi_platform_data *mipi_dsi_pdata;
 
-static int vsync_gpio = -1;
+static int vsync_gpio = 97;
 
 static struct platform_driver mipi_dsi_driver = {
 	.probe = mipi_dsi_probe,
@@ -487,10 +485,6 @@ RETRY_MIPI_DSI_ON:
 		}
 	}
 
-#ifdef CONFIG_MSM_BUS_SCALING
-	mdp_bus_scale_update_request(2);
-#endif
-
 	mdp4_overlay_dsi_state_set(ST_DSI_RESUME);
 
 	if (mdp_rev >= MDP_REV_41)
@@ -501,11 +495,6 @@ RETRY_MIPI_DSI_ON:
 	pr_debug("%s-:\n", __func__);
 
 	return ret;
-}
-
-static int mipi_dsi_early_off(struct platform_device *pdev)
-{
-	return panel_next_early_off(pdev);
 }
 
 
@@ -661,9 +650,7 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 	pdata = mdp_dev->dev.platform_data;
 	pdata->on = mipi_dsi_on;
 	pdata->off = mipi_dsi_off;
-	pdata->fps_level_change = mipi_dsi_fps_level_change;
 	pdata->late_init = mipi_dsi_late_init;
-	pdata->early_off = mipi_dsi_early_off;
 	pdata->next = pdev;
 
 	/*
