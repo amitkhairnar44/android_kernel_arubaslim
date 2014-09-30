@@ -255,6 +255,7 @@ void msm_sensor_checking_mode_changed(struct msm_sensor_ctrl_t *s_ctrl)
         mdelay(10);
 #ifdef SENSOR_POWER_CHECK_PATCH
 	s_ctrl->sensor_state = MSM_SENSOR_POWER_DOWN;
+#endif    
         cnt++;
     }    
     if(cnt)printk("[S5K4ECGX] wait time to change mode : %dms\n",cnt*10);
@@ -500,8 +501,10 @@ long msm_sensor_subdev_ioctl(struct v4l2_subdev *sd,
  		return -EINVAL;
 #endif
 	switch (cmd) {
+#ifdef SENSOR_POWER_CHECK_PATCH
 	case VIDIOC_MSM_SENSOR_CFG:
 		return s_ctrl->func_tbl->sensor_config(s_ctrl, argp);
+#endif
 	case VIDIOC_MSM_SENSOR_RELEASE:
 		return msm_sensor_release(s_ctrl);
 	case VIDIOC_MSM_SENSOR_CSID_INFO: {
@@ -1011,11 +1014,13 @@ int32_t msm_sensor_power(struct v4l2_subdev *sd, int on)
 #endif		
  		}
 	} else {
+#ifdef SENSOR_POWER_CHECK_PATCH					
 		if(s_ctrl->sensor_state == MSM_SENSOR_POWER_DOWN) {
  			pr_err("%s: sensor already in power down state\n",__func__);
  			mutex_unlock(s_ctrl->msm_sensor_mutex);
  			return -EINVAL;
  		}
+#endif		
 		rc = s_ctrl->func_tbl->sensor_power_down(s_ctrl);
 #ifdef SENSOR_POWER_CHECK_PATCH					
 		s_ctrl->sensor_state = MSM_SENSOR_POWER_DOWN;
