@@ -96,6 +96,8 @@ static int pdev_list_cnt;
 
 int vsync_mode = 1;
 
+int i, ret = 0;
+
 #define MAX_BLIT_REQ 256
 
 #define MAX_FBI_LIST 32
@@ -1979,7 +1981,7 @@ static int msm_fb_release(struct fb_info *info, int user)
 
 int msm_fb_wait_for_fence(struct msm_fb_data_type *mfd)
 {
-	int i, ret = 0;
+	int i, ret;
 	/* buf sync */
 	for (i = 0; i < mfd->acq_fen_cnt; i++) {
 		ret = sync_fence_wait(mfd->acq_fen[i], WAIT_FENCE_TIMEOUT);
@@ -2051,7 +2053,7 @@ static void bl_workqueue_handler(struct work_struct *work)
 	}
 }
 
-static int msm_fb_pan_display(struct fb_var_screeninfo *var,
+static int msm_fb_pan_display_ex(struct fb_var_screeninfo *var,
 			      struct fb_info *info, u32 wait_for_finish)
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
@@ -2184,6 +2186,7 @@ static int msm_fb_pan_display_sub(struct fb_var_screeninfo *var,
 	down(&msm_fb_pan_sem);
 
 	/* buf sync */
+	//int i, ret = 0;
 	for (i = 0; i < mfd->acq_fen_cnt; i++) {
 		ret = sync_fence_wait(mfd->acq_fen[i], WAIT_FENCE_TIMEOUT);
 		sync_fence_put(mfd->acq_fen[i]);
