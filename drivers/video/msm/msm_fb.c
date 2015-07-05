@@ -665,7 +665,7 @@ static int msm_fb_resume_sub(struct msm_fb_data_type *mfd)
 
 	if ((!mfd) || (mfd->key != MFD_KEY))
 		return 0;
-
+	
 	pdata = (struct msm_fb_panel_data *)mfd->pdev->dev.platform_data;
 
 	/* attach display channel irq if there's any */
@@ -885,6 +885,7 @@ static void msmfb_early_suspend(struct early_suspend *h)
 	memset32_io((void *)fbi->screen_base, 0xFF000000, fbi->fix.smem_len);
 #endif
 
+	msm_fb_pan_idle(mfd);
 	pdata = (struct msm_fb_panel_data *)mfd->pdev->dev.platform_data;
 	if (hdmi_prim_display &&
 		(mfd->panel_info.type == HDMI_PANEL ||
