@@ -1967,26 +1967,14 @@ requeue_drop_frag:
 			sc->rx.frag = NULL;
 		}
 requeue:
-		list_add_tail(&bf->list, &sc->rx.rxbuf);
-		if (flush)
-			continue;
-
 		if (edma) {
+			list_add_tail(&bf->list, &sc->rx.rxbuf);
 			ath_rx_edma_buf_link(sc, qtype);
 		} else {
-<<<<<<< HEAD
-			ath_rx_buf_link(sc, bf);
-			ath9k_hw_rxena(ah);
-=======
-<<<<<<< HEAD
 			list_move_tail(&bf->list, &sc->rx.rxbuf);
 			ath_rx_buf_link(sc, bf);
 			if (!flush)
 				ath9k_hw_rxena(ah);
-=======
-			ath_rx_buf_relink(sc, bf);
-			ath9k_hw_rxena(ah);
->>>>>>> 58902be... Squashed update of kernel from 3.4.62 to 3.4.63
 		}
 	} while (1);
 
@@ -1999,3 +1987,4 @@ requeue:
 
 	return 0;
 }
+
