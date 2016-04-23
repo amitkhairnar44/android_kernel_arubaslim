@@ -12,7 +12,6 @@
  */
 
 #include <linux/vmalloc.h>
-#include <mach/board.h>
 
 #include "kgsl.h"
 #include "kgsl_sharedmem.h"
@@ -707,8 +706,6 @@ static int adreno_dump(struct kgsl_device *device)
 
 	mb();
 
-	msm_clk_dump_debug_info();
-
 	if (adreno_is_a2xx(adreno_dev))
 		adreno_dump_a2xx(device);
 	else if (adreno_is_a3xx(adreno_dev))
@@ -925,9 +922,6 @@ int adreno_postmortem_dump(struct kgsl_device *device, int manual)
 
 	KGSL_LOG_DUMP(device, "POWER: INTERVAL TIMEOUT = %08X ",
 		pwr->interval_timeout);
-
-	KGSL_LOG_DUMP(device, "POWER: NAP ALLOWED = %d | START_STOP_SLEEP_WAKE = %d\n",
-	pwr->nap_allowed, pwr->strtstp_sleepwake);
 
 	KGSL_LOG_DUMP(device, "GRP_CLK = %lu ",
 				  kgsl_get_clkrate(pwr->grp_clks[0]));

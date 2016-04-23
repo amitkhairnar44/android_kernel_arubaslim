@@ -38,7 +38,6 @@
 #include <linux/i2c.h>
 #include <linux/i2c/sx150x.h>
 #include <linux/gpio.h>
-#include <linux/android_pmem.h>
 #include <linux/bootmem.h>
 #include <linux/mfd/marimba.h>
 #include <mach/vreg.h>
@@ -49,9 +48,7 @@
 #include <linux/smsc911x.h>
 #include <linux/atmel_maxtouch.h>
 #include <linux/msm_adc.h>
-#include <linux/ion.h>
-#include <linux/dma-contiguous.h>
-#include <linux/dma-mapping.h>
+#include <linux/msm_ion.h>
 #include <linux/delay.h>
 #include "devices.h"
 #include "timer.h"
@@ -65,8 +62,8 @@
 #ifdef CONFIG_SEC_DEBUG
 #include <linux/sec_debug.h>
 #endif
-#define PMEM_KERNEL_EBI1_SIZE	0x3A000
-#define MSM_PMEM_AUDIO_SIZE	0xF0000
+#define RESERVE_KERNEL_EBI1_SIZE	0x3A000
+#define MSM_RESERVE_AUDIO_SIZE	0xF0000
 #define BOOTLOADER_BASE_ADDR	0x10000
 
 #ifndef CONFIG_BT_CSR_7820
@@ -127,6 +124,10 @@ struct syna_gpio_data {
 #endif
 #ifdef CONFIG_SENSORS_PX3215
 #include <linux/px3215.h>
+#endif
+
+#ifdef CONFIG_NFC_PN547
+#include <linux/pn547.h>
 #endif
 
 #define WLAN_33V_CONTROL_FOR_BT_ANTENNA
@@ -331,6 +332,63 @@ static struct platform_device sec_device_jack = {
 static struct platform_device msm_vibrator_device = {
 	.name	= "msm_vibrator",
 	.id		= -1,
+};
+#endif
+
+#ifdef CONFIG_NFC_PN547
+static int pn547_conf_gpio(void)
+{
+	pr_debug("pn547_conf_gpio\n");
+
+	gpio_tlmm_config(GPIO_CFG(GPIO_NFC_SDA, 0, GPIO_CFG_INPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+	gpio_tlmm_config(GPIO_CFG(GPIO_NFC_SCL, 0, GPIO_CFG_INPUT,
+		GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+	return 0;
+}
+
+static int __init pn547_init(void)
+{
+	gpio_tlmm_config(GPIO_CFG(GPIO_NFC_IRQ, 0, GPIO_CFG_INPUT,
+		GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+	gpio_tlmm_config(GPIO_CFG(GPIO_NFC_EN, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+	gpio_tlmm_config(GPIO_CFG(GPIO_NFC_FIRMWARE, 0, GPIO_CFG_OUTPUT,
+		GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+
+	pn547_conf_gpio();
+	return 0;
+}
+#endif
+
+#ifdef CONFIG_NFC_PN547
+static struct i2c_gpio_platform_data pn547_i2c_gpio_data = {
+	.sda_pin = GPIO_NFC_SDA,
+	.scl_pin = GPIO_NFC_SCL,
+	.udelay = 5,
+};
+
+static struct platform_device pn547_i2c_gpio_device = {
+	.name = "i2c-gpio",
+	.id = 5,
+	.dev = {
+		.platform_data = &pn547_i2c_gpio_data,
+	},
+};
+
+static struct pn547_i2c_platform_data pn547_pdata = {
+	.conf_gpio = pn547_conf_gpio,
+	.irq_gpio = GPIO_NFC_IRQ,
+	.ven_gpio = GPIO_NFC_EN,
+	.firm_gpio = GPIO_NFC_FIRMWARE,
+};
+
+static struct i2c_board_info pn547_info[] __initdata = {
+	{
+		I2C_BOARD_INFO("pn547", 0x2b),
+		.irq = MSM_GPIO_TO_INT(GPIO_NFC_IRQ),
+		.platform_data = &pn547_pdata,
+	},
 };
 #endif
 
@@ -1120,11 +1178,7 @@ static struct fsa9480_platform_data jena_fsa9480_pdata = {
        .uart_cb        = NULL,
        .charger_cb     = jena_charger_cb,
        .jig_cb         = NULL, //jena_jig_cb, 
-#if !defined(CONFIG_MACH_NEVIS3G)
        .ovp_cb		= jena_ovp_cb,
-#else 
-	.ovp_cb		= NULL, /* NEVIS dosen't use FSA' OVP */
-#endif
 };
 
 static struct i2c_gpio_platform_data fsa9480_i2c_gpio_data = {
@@ -1297,6 +1351,72 @@ static void stc_power_supply_unregister(struct power_supply *psy)
 	aries_charger.psy_fuelgauge = NULL;
 }
 
+#ifdef CONFIG_MACH_ROYSS_AUS
+static struct stc311x_platform_data stc3115_data = {
+                .battery_online = NULL,
+                .charger_online = null_fn, 		// used in stc311x_get_status()
+                .charger_enable = null_fn,		// used in stc311x_get_status()
+                .power_supply_register = stc_power_supply_register,
+                .power_supply_unregister = stc_power_supply_unregister,
+
+		.Vmode= 0,       /*REG_MODE, BIT_VMODE 1=Voltage mode, 0=mixed mode */
+  		.Alm_SOC = 10,      /* SOC alm level %*/
+  		.Alm_Vbat = 3600,   /* Vbat alm level mV*/
+  		.CC_cnf = 276,      /* nominal CC_cnf, coming from battery characterisation*/
+  		.VM_cnf = 280,      /* nominal VM cnf , coming from battery characterisation*/
+  		.Cnom = 1350,       /* nominal capacity in mAh, coming from battery characterisation*/
+  		.Rsense = 10,       /* sense resistor mOhms*/
+  		.RelaxCurrent = 100, /* current for relaxation in mA (< C/20) */
+  		.Adaptive = 1,     /* 1=Adaptive mode enabled, 0=Adaptive mode disabled */
+
+		.CapDerating[6] = 260,   /* capacity derating in 0.1%, for temp = -20�C */
+  		.CapDerating[5] = 140,   /* capacity derating in 0.1%, for temp = -10�C */
+		.CapDerating[4] = 110,   /* capacity derating in 0.1%, for temp = 0�C */
+		.CapDerating[3] = 50,   /* capacity derating in 0.1%, for temp = 10�C */
+		.CapDerating[2] = 0,   /* capacity derating in 0.1%, for temp = 25�C */
+		.CapDerating[1] = -20,   /* capacity derating in 0.1%, for temp = 40�C */
+		.CapDerating[0] = -30,   /* capacity derating in 0.1%, for temp = 60�C */
+
+  		.OCVOffset[15] = 35,    /* OCV curve adjustment */
+		.OCVOffset[14] = 22,   /* OCV curve adjustment */
+		.OCVOffset[13] = 19,    /* OCV curve adjustment */
+		.OCVOffset[12] = 10,    /* OCV curve adjustment */
+		.OCVOffset[11] = 0,    /* OCV curve adjustment */
+		.OCVOffset[10] = 10,    /* OCV curve adjustment */
+		.OCVOffset[9] = 25,     /* OCV curve adjustment */
+		.OCVOffset[8] = 3,      /* OCV curve adjustment */
+		.OCVOffset[7] = -2,      /* OCV curve adjustment */
+		.OCVOffset[6] = 4,    /* OCV curve adjustment */
+		.OCVOffset[5] = 19,    /* OCV curve adjustment */
+		.OCVOffset[4] = 44,     /* OCV curve adjustment */
+		.OCVOffset[3] = 23,    /* OCV curve adjustment */
+		.OCVOffset[2] = 28,     /* OCV curve adjustment */
+		.OCVOffset[1] = 127,    /* OCV curve adjustment */
+		.OCVOffset[0] = 40,     /* OCV curve adjustment */
+		
+		.OCVOffset2[15] = 16,    /* OCV curve adjustment */
+		.OCVOffset2[14] = 14,   /* OCV curve adjustment */
+		.OCVOffset2[13] = 9,    /* OCV curve adjustment */
+		.OCVOffset2[12] = 2,    /* OCV curve adjustment */
+		.OCVOffset2[11] = 4,    /* OCV curve adjustment */
+		.OCVOffset2[10] = 19,    /* OCV curve adjustment */
+		.OCVOffset2[9] = 1,     /* OCV curve adjustment */
+		.OCVOffset2[8] = -3,      /* OCV curve adjustment */
+		.OCVOffset2[7] = 7,      /* OCV curve adjustment */
+		.OCVOffset2[6] = 21,    /* OCV curve adjustment */
+		.OCVOffset2[5] = 37,    /* OCV curve adjustment */
+		.OCVOffset2[4] = 26,     /* OCV curve adjustment */
+		.OCVOffset2[3] = 19,    /* OCV curve adjustment */
+		.OCVOffset2[2] = 76,     /* OCV curve adjustment */
+		.OCVOffset2[1] = 124,    /* OCV curve adjustment */
+		.OCVOffset2[0] = 0,     /* OCV curve adjustment */
+
+			/*if the application temperature data is preferred than the STC3115 temperature*/
+  		.ExternalTemperature = Temperature_fn, /*External temperature fonction, return �C*/
+  		.ForceExternalTemperature = 0, /* 1=External temperature, 0=STC3115 temperature */
+		
+};
+#else
 static struct stc311x_platform_data stc3115_data = {
                 .battery_online = NULL,
                 .charger_online = null_fn, 		// used in stc311x_get_status()
@@ -1361,7 +1481,7 @@ static struct stc311x_platform_data stc3115_data = {
   		.ForceExternalTemperature = 0, /* 1=External temperature, 0=STC3115 temperature */
 		
 };
-
+#endif
 
 
 static struct i2c_board_info stc_i2c2_boardinfo[] = {
@@ -1496,11 +1616,11 @@ static struct msm_i2c_platform_data msm_gsbi1_qup_i2c_pdata = {
 };
 
 #ifdef CONFIG_ARCH_MSM7X27A
-#define MSM_PMEM_MDP_SIZE       0x2300000
-#define MSM7x25A_MSM_PMEM_MDP_SIZE       0x1500000
+#define MSM_RESERVE_MDP_SIZE       0x2300000
+#define MSM7x25A_MSM_RESERVE_MDP_SIZE       0x1500000
 
-#define MSM_PMEM_ADSP_SIZE      0x1300000
-#define MSM7x25A_MSM_PMEM_ADSP_SIZE      0xB91000
+#define MSM_RESERVE_ADSP_SIZE      0x1500000
+#define MSM7x25A_MSM_RESERVE_ADSP_SIZE      0x1500000
 #define CAMERA_ZSL_SIZE		(SZ_1M * 60)
 #endif
 
@@ -1513,12 +1633,6 @@ static int msm_ion_sf_size;
 static int msm_ion_camera_size_carving;
 #endif
 
-#define CAMERA_HEAP_BASE	0x0
-#ifdef CONFIG_CMA
-#define CAMERA_HEAP_TYPE	ION_HEAP_TYPE_DMA
-#else
-#define CAMERA_HEAP_TYPE	ION_HEAP_TYPE_CARVEOUT
-#endif
 
 static struct android_usb_platform_data android_usb_pdata = {
 	.update_pid_and_serial_num = usb_diag_update_pid_and_serial_num,
@@ -2050,61 +2164,23 @@ static struct msm_pm_boot_platform_data msm_pm_8625_boot_pdata __initdata = {
 	.v_addr = MSM_CFG_CTL_BASE,
 };
 
-static struct android_pmem_platform_data android_pmem_adsp_pdata = {
-	.name = "pmem_adsp",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
-	.cached = 1,
-	.memory_type = MEMTYPE_EBI1,
-};
-
-static struct platform_device android_pmem_adsp_device = {
-	.name = "android_pmem",
-	.id = 1,
-	.dev = { .platform_data = &android_pmem_adsp_pdata },
-};
-
-static unsigned pmem_mdp_size = MSM_PMEM_MDP_SIZE;
-static int __init pmem_mdp_size_setup(char *p)
+static unsigned reserve_mdp_size = MSM_RESERVE_MDP_SIZE;
+static int __init reserve_mdp_size_setup(char *p)
 {
-	pmem_mdp_size = memparse(p, NULL);
+	reserve_mdp_size = memparse(p, NULL);
 	return 0;
 }
 
-early_param("pmem_mdp_size", pmem_mdp_size_setup);
+early_param("reserve_mdp_size", reserve_mdp_size_setup);
 
-static unsigned pmem_adsp_size = MSM_PMEM_ADSP_SIZE;
-static int __init pmem_adsp_size_setup(char *p)
+static unsigned reserve_adsp_size = MSM_RESERVE_ADSP_SIZE;
+static int __init reserve_adsp_size_setup(char *p)
 {
-	pmem_adsp_size = memparse(p, NULL);
+	reserve_adsp_size = memparse(p, NULL);
 	return 0;
 }
 
-early_param("pmem_adsp_size", pmem_adsp_size_setup);
-
-static struct android_pmem_platform_data android_pmem_audio_pdata = {
-	.name = "pmem_audio",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
-	.cached = 0,
-	.memory_type = MEMTYPE_EBI1,
-};
-
-static struct platform_device android_pmem_audio_device = {
-	.name = "android_pmem",
-	.id = 2,
-	.dev = { .platform_data = &android_pmem_audio_pdata },
-};
-
-static struct android_pmem_platform_data android_pmem_pdata = {
-	.name = "pmem",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
-	.cached = 1,
-	.memory_type = MEMTYPE_EBI1,
-};
-static struct platform_device android_pmem_device = {
-	.name = "android_pmem",
-	.id = 0,
-	.dev = { .platform_data = &android_pmem_pdata },
-};
+early_param("reserve_adsp_size", reserve_adsp_size_setup);
 
 static struct smsc911x_platform_config smsc911x_config = {
 	.irq_polarity	= SMSC911X_IRQ_POLARITY_ACTIVE_HIGH,
@@ -2302,13 +2378,13 @@ static struct platform_device *msm7627a_surf_ffa_devices[] __initdata = {
 #ifdef CONFIG_BATTERY_STC3115
 	&stc_fuelgauge_i2c_gpio_device,
 #endif
+#ifdef CONFIG_NFC_PN547
+	&pn547_i2c_gpio_device,
+#endif
 };
 
 static struct platform_device *common_devices[] __initdata = {
 	&android_usb_device,
-	&android_pmem_device,
-	&android_pmem_adsp_device,
-	&android_pmem_audio_device,
 	&msm_device_nand,
 	&msm_device_snd,
 	&msm_device_adspdec,
@@ -2353,45 +2429,39 @@ static struct platform_device *msm8625_surf_devices[] __initdata = {
 #ifdef CONFIG_BATTERY_STC3115
 	&stc_fuelgauge_i2c_gpio_device,
 #endif
+#ifdef CONFIG_NFC_PN547
+	&pn547_i2c_gpio_device,
+#endif
 };
 
-static unsigned pmem_kernel_ebi1_size = PMEM_KERNEL_EBI1_SIZE;
-static int __init pmem_kernel_ebi1_size_setup(char *p)
+static unsigned reserve_kernel_ebi1_size = RESERVE_KERNEL_EBI1_SIZE;
+static int __init reserve_kernel_ebi1_size_setup(char *p)
 {
-	pmem_kernel_ebi1_size = memparse(p, NULL);
+	reserve_kernel_ebi1_size = memparse(p, NULL);
 	return 0;
 }
-early_param("pmem_kernel_ebi1_size", pmem_kernel_ebi1_size_setup);
+early_param("reserve_kernel_ebi1_size", reserve_kernel_ebi1_size_setup);
 
-static unsigned pmem_audio_size = MSM_PMEM_AUDIO_SIZE;
-static int __init pmem_audio_size_setup(char *p)
+static unsigned reserve_audio_size = MSM_RESERVE_AUDIO_SIZE;
+static int __init reserve_audio_size_setup(char *p)
 {
-	pmem_audio_size = memparse(p, NULL);
+	reserve_audio_size = memparse(p, NULL);
 	return 0;
 }
-early_param("pmem_audio_size", pmem_audio_size_setup);
+early_param("reserve_audio_size", reserve_audio_size_setup);
 
 static void fix_sizes(void)
 {
 	if (machine_is_msm7625a_surf() || machine_is_msm7625a_ffa()) {
-		pmem_mdp_size = MSM7x25A_MSM_PMEM_MDP_SIZE;
-		pmem_adsp_size = MSM7x25A_MSM_PMEM_ADSP_SIZE;
+		reserve_mdp_size = MSM7x25A_MSM_RESERVE_MDP_SIZE;
+		reserve_adsp_size = MSM7x25A_MSM_RESERVE_ADSP_SIZE;
 	} else {
-		pmem_mdp_size = MSM_PMEM_MDP_SIZE;
-		pmem_adsp_size = MSM_PMEM_ADSP_SIZE;
+		reserve_mdp_size = MSM_RESERVE_MDP_SIZE;
+		reserve_adsp_size = MSM_RESERVE_ADSP_SIZE;
 	}
-
-	if (get_ddr_size() > SZ_512M)
-		pmem_adsp_size = CAMERA_ZSL_SIZE;
 #ifdef CONFIG_ION_MSM
-	msm_ion_camera_size = pmem_adsp_size;
-	msm_ion_audio_size = MSM_PMEM_AUDIO_SIZE;
-	msm_ion_sf_size = pmem_mdp_size;
-#ifdef CONFIG_CMA
-	msm_ion_camera_size_carving = 0;
-#else
-	msm_ion_camera_size_carving = msm_ion_camera_size;
-#endif
+	msm_ion_audio_size = MSM_RESERVE_AUDIO_SIZE;
+	msm_ion_sf_size = reserve_mdp_size;
 #endif
 }
 
@@ -2401,45 +2471,28 @@ static struct ion_co_heap_pdata co_ion_pdata = {
 	.adjacent_mem_id = INVALID_HEAP_ID,
 	.align = PAGE_SIZE,
 };
-
-static struct ion_co_heap_pdata co_mm_ion_pdata = {
-	.adjacent_mem_id = INVALID_HEAP_ID,
-	.align = PAGE_SIZE,
-};
-
-static u64 msm_dmamask = DMA_BIT_MASK(32);
-
-static struct platform_device ion_cma_device = {
-	.name = "ion-cma-device",
-	.id = -1,
-	.dev = {
-		.dma_mask = &msm_dmamask,
-		.coherent_dma_mask = DMA_BIT_MASK(32),
-	}
-};
 #endif
 
 /**
  * These heaps are listed in the order they will be allocated.
  * Don't swap the order unless you know what you are doing!
  */
-struct ion_platform_heap msm7x27a_heaps[] = {
+struct ion_platform_heap roy_heaps[] = {
 		{
 			.id	= ION_SYSTEM_HEAP_ID,
 			.type	= ION_HEAP_TYPE_SYSTEM,
 			.name	= ION_VMALLOC_HEAP_NAME,
 		},
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
-		/* PMEM_ADSP = CAMERA */
+		/* ION_ADSP = CAMERA */
 		{
 			.id	= ION_CAMERA_HEAP_ID,
-			.type	= CAMERA_HEAP_TYPE,
+			.type	= ION_HEAP_TYPE_CARVEOUT,
 			.name	= ION_CAMERA_HEAP_NAME,
 			.memory_type = ION_EBI_TYPE,
-			.extra_data = (void *)&co_mm_ion_pdata,
-			.priv	= (void *)&ion_cma_device.dev,
+			.extra_data = (void *)&co_ion_pdata,
 		},
-		/* AUDIO HEAP 1*/
+		/* ION_AUDIO */
 		{
 			.id	= ION_AUDIO_HEAP_ID,
 			.type	= ION_HEAP_TYPE_CARVEOUT,
@@ -2447,7 +2500,7 @@ struct ion_platform_heap msm7x27a_heaps[] = {
 			.memory_type = ION_EBI_TYPE,
 			.extra_data = (void *)&co_ion_pdata,
 		},
-		/* PMEM_MDP = SF */
+		/* ION_MDP = SF */
 		{
 			.id	= ION_SF_HEAP_ID,
 			.type	= ION_HEAP_TYPE_CARVEOUT,
@@ -2455,22 +2508,13 @@ struct ion_platform_heap msm7x27a_heaps[] = {
 			.memory_type = ION_EBI_TYPE,
 			.extra_data = (void *)&co_ion_pdata,
 		},
-		/* AUDIO HEAP 2*/
-		{
-			.id	= ION_AUDIO_HEAP_BL_ID,
-			.type	= ION_HEAP_TYPE_CARVEOUT,
-			.name	= ION_AUDIO_BL_HEAP_NAME,
-			.memory_type = ION_EBI_TYPE,
-			.extra_data = (void *)&co_ion_pdata,
-			.base = BOOTLOADER_BASE_ADDR,
-		},
 #endif
 };
 
 static struct ion_platform_data ion_pdata = {
 	.nr = MSM_ION_HEAP_NUM,
 	.has_outer_cache = 1,
-	.heaps = msm7x27a_heaps,
+	.heaps = roy_heaps,
 };
 
 static struct platform_device ion_dev = {
@@ -2491,65 +2535,20 @@ static struct memtype_reserve msm7x27a_reserve_table[] __initdata = {
 	},
 };
 
-#ifdef CONFIG_ANDROID_PMEM
-#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
-static struct android_pmem_platform_data *pmem_pdata_array[] __initdata = {
-		&android_pmem_adsp_pdata,
-		&android_pmem_audio_pdata,
-		&android_pmem_pdata,
-};
-#endif
-#endif
-
-static void __init size_pmem_devices(void)
-{
-#ifdef CONFIG_ANDROID_PMEM
-#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
-	android_pmem_adsp_pdata.size = pmem_adsp_size;
-	android_pmem_pdata.size = pmem_mdp_size;
-	android_pmem_audio_pdata.size = pmem_audio_size;
-#endif
-#endif
-}
-
-#ifdef CONFIG_ANDROID_PMEM
-#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
-static void __init reserve_memory_for(struct android_pmem_platform_data *p)
-{
-	msm7x27a_reserve_table[p->memory_type].size += p->size;
-}
-#endif
-#endif
-
-static void __init reserve_pmem_memory(void)
-{
-#ifdef CONFIG_ANDROID_PMEM
-#ifndef CONFIG_MSM_MULTIMEDIA_USE_ION
-	unsigned int i;
-	for (i = 0; i < ARRAY_SIZE(pmem_pdata_array); ++i)
-		reserve_memory_for(pmem_pdata_array[i]);
-
-	msm7x27a_reserve_table[MEMTYPE_EBI1].size += pmem_kernel_ebi1_size;
-#endif
-#endif
-}
-
 static void __init size_ion_devices(void)
 {
 #ifdef CONFIG_MSM_MULTIMEDIA_USE_ION
 	ion_pdata.heaps[1].size = msm_ion_camera_size;
-	ion_pdata.heaps[2].size = PMEM_KERNEL_EBI1_SIZE;
+	ion_pdata.heaps[2].size = msm_ion_audio_size;
 	ion_pdata.heaps[3].size = msm_ion_sf_size;
-	ion_pdata.heaps[4].size = msm_ion_audio_size;
 #endif
 }
 
 static void __init reserve_ion_memory(void)
 {
 #if defined(CONFIG_ION_MSM) && defined(CONFIG_MSM_MULTIMEDIA_USE_ION)
-	msm7x27a_reserve_table[MEMTYPE_EBI1].size += PMEM_KERNEL_EBI1_SIZE;
-	msm7x27a_reserve_table[MEMTYPE_EBI1].size +=
-		msm_ion_camera_size_carving;
+	msm7x27a_reserve_table[MEMTYPE_EBI1].size += msm_ion_camera_size;
+	msm7x27a_reserve_table[MEMTYPE_EBI1].size += msm_ion_audio_size;
 	msm7x27a_reserve_table[MEMTYPE_EBI1].size += msm_ion_sf_size;
 #endif
 }
@@ -2557,8 +2556,6 @@ static void __init reserve_ion_memory(void)
 static void __init msm7x27a_calculate_reserve_sizes(void)
 {
 	fix_sizes();
-	size_pmem_devices();
-	reserve_pmem_memory();
 	size_ion_devices();
 	reserve_ion_memory();
 }
@@ -2577,24 +2574,15 @@ static struct reserve_info msm7x27a_reserve_info __initdata = {
 static void __init msm7x27a_reserve(void)
 {
 	reserve_info = &msm7x27a_reserve_info;
-	memblock_remove(MSM8625_NON_CACHE_MEM, SZ_2K);
-	memblock_remove(BOOTLOADER_BASE_ADDR, msm_ion_audio_size);
 	msm_reserve();
-#ifdef CONFIG_CMA
-	dma_declare_contiguous(
-			&ion_cma_device.dev,
-			msm_ion_camera_size,
-			CAMERA_HEAP_BASE,
-			0xa0000000);
-#endif
 }
 
 static void __init msm8625_reserve(void)
 {
-	memblock_remove(MSM8625_CPU_PHYS, SZ_8);
+	msm7x27a_reserve();
 	memblock_remove(MSM8625_WARM_BOOT_PHYS, SZ_32);
 	memblock_remove(MSM8625_NON_CACHE_MEM, SZ_2K);
-	msm7x27a_reserve();
+	memblock_remove(MSM8625_CPU_PHYS, SZ_8);
 }
 
 static void __init msm7x27a_device_i2c_init(void)
@@ -3084,7 +3072,9 @@ static void keypad_gpio_init(void)
 static void nc_gpio_init(void)
 {
 	printk(KERN_INFO "[NC] %s start\n", __func__);
+#ifndef CONFIG_NFC_PN547
 	gpio_tlmm_config(GPIO_CFG(49,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+#endif
 	gpio_tlmm_config(GPIO_CFG(75,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 	gpio_tlmm_config(GPIO_CFG(76,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 	gpio_tlmm_config(GPIO_CFG(82,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
@@ -3112,8 +3102,9 @@ static void __init msm7x2x_init(void)
 	msm7x27a_uartdm_config();
 
 	msm7x27a_otg_gadget();
+#ifndef CONFIG_NFC_PN547
 	msm7x27a_cfg_smsc911x();
-
+#endif
 	fsa9480_gpio_init();
 // GSCHO
 ////////////////////////////////////////////////////////////////////////////
@@ -3146,6 +3137,10 @@ static void __init msm7x2x_init(void)
 
 	samsung_sys_class_init();
 
+#ifdef CONFIG_NFC_PN547
+	pn547_init();
+#endif
+
 #if defined(CONFIG_TOUCHSCREEN_MELFAS_KYLE) 
 	i2c_register_board_info( 2, touch_i2c_devices, ARRAY_SIZE(touch_i2c_devices));
 #endif
@@ -3162,6 +3157,9 @@ static void __init msm7x2x_init(void)
 #ifdef CONFIG_BATTERY_STC3115
 	printk("STC3115 is registered");
 	i2c_register_board_info(6, stc_i2c2_boardinfo, ARRAY_SIZE(stc_i2c2_boardinfo));
+#endif
+#ifdef CONFIG_NFC_PN547
+	i2c_register_board_info(5, pn547_info, ARRAY_SIZE(pn547_info));
 #endif
 
 	keypad_gpio_init();
