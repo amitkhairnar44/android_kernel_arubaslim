@@ -92,6 +92,8 @@ GSYMS
 GTAGS
 
 *.orig
+*.rej
+*.bak
 *~
 dtbToolCM
 mkbootimg
