@@ -4178,13 +4178,9 @@ int msm_fb_v4l2_update(void *par,
 		srcp0_addr, srcp1_addr,
 		srcp2_addr);
 #else
-#ifdef CONFIG_FB_MSM_MDP30
-	return mdp_ppp_v4l2_overlay_play(fbi_list[0],
-		srcp0_addr, srcp0_size,
-		srcp1_addr, srcp1_size);
-#else
+
 	return -EINVAL;
-#endif
+
 #endif
 }
 EXPORT_SYMBOL(msm_fb_v4l2_update);
