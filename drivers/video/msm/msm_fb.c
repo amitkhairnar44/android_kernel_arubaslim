@@ -1609,9 +1609,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	var->yres_virtual = panel_info->yres * mfd->fb_page +
 		((PAGE_SIZE - remainder)/fix->line_length) * mfd->fb_page;
 	var->bits_per_pixel = bpp * 8;	/* FrameBuffer color depth */
-<<<<<<< HEAD
 
-=======
 	if (mfd->dest == DISPLAY_LCD) {
 		if (panel_info->type == MDDI_PANEL && panel_info->mddi.is_type1)
 			var->reserved[3] = panel_info->lcd.refx100 / (100 * 2);
@@ -1632,7 +1630,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 				  panel_info->yres));
 		}
 	}
->>>>>>> parent of ea43702... mdp: display: update from chil360-kernel
+
 	pr_debug("reserved[3] %u\n", var->reserved[4]);
 
 		/*

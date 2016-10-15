@@ -165,7 +165,7 @@ void panic(const char *fmt, ...)
 #endif
 
 #ifdef CONFIG_APPLY_GA_SOLUTION
-	dump_all_task_info();
+	//dump_all_task_info();
 	//dump_cpu_stat();	double fault is occurred if you call this function !
 #endif
 
